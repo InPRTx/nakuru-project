@@ -1,3 +1,5 @@
+import traceback
+
 import aiohttp
 import asyncio
 import inspect
@@ -38,36 +40,40 @@ class CQHTTP(CQHTTP_Protocol):
                  port: int = None,
                  http_port: int = None,
                  global_dependencies: List[Depend] = None,
-                 global_middlewares: List = None):
+                 global_middlewares: List = None,
+                 headers=None):
         self.global_dependencies = global_dependencies or []
         self.global_middlewares = global_middlewares or []
 
-        self.baseurl = f"http://{host}:{port}"
+        self.baseurl = f"ws://{host}:{port}"
         self.baseurl_http = f"http://{host}:{http_port}"
+        self.headers = headers
 
     async def ws_event(self):
-        async with aiohttp.ClientSession() as session:
-            async with session.ws_connect(f"{self.baseurl}") as ws_connection:
-                Protocol.info(f"connected")
-                while True:
-                    try:
-                        received_data = await ws_connection.receive_json()
-                    except TypeError:
-                        continue
-                    if received_data:
-                        post_type = received_data["post_type"]
-                        if post_type == "message":
-                            received_data = MessageTypes[received_data["message_type"]].parse_obj(received_data)
-                        elif post_type == "notice":
-                            received_data = NoticeTypes[received_data["notice_type"]].parse_obj(received_data)
-                        elif post_type == "request":
-                            received_data = RequestTypes[received_data["request_type"]].parse_obj(received_data)
-                        else:
-                            continue
-                        await self.queue.put(InternalEvent(
-                            name=self.getEventCurrentName(type(received_data)),
-                            body=received_data
-                        ))
+        session = aiohttp.ClientSession()
+        ws_connection = await session.ws_connect(f"{self.baseurl}", headers=self.headers)
+        Protocol.info(f"connected")
+        while True:
+            try:
+                received_data = await ws_connection.receive_json()
+                if not received_data:
+                    return
+            except TypeError:
+                continue
+
+            post_type = received_data["post_type"]
+            if post_type == "message":
+                received_data = MessageTypes[received_data["message_type"]].parse_obj(received_data)
+            elif post_type == "notice":
+                received_data = NoticeTypes[received_data["notice_type"]].parse_obj(received_data)
+            elif post_type == "request":
+                received_data = RequestTypes[received_data["request_type"]].parse_obj(received_data)
+            else:
+                continue
+            await self.queue.put(InternalEvent(
+                name=self.getEventCurrentName(type(received_data)),
+                body=received_data
+            ))
 
     async def event_runner(self):
         while True:
@@ -112,7 +118,7 @@ class CQHTTP(CQHTTP_Protocol):
                     if inspect.iscoroutinefunction(depend_func):
                         depend_func = alru_cache(depend_func)
                     else:
-                        depend_func = lru_cache(depend_func)
+                        depend_func = alru_cache(depend_func)
                     lru_cache_sets[original] = depend_func
 
             result = await self.executor_with_middlewares(
@@ -126,38 +132,38 @@ class CQHTTP(CQHTTP_Protocol):
         CallParams = {}
         for name, annotation, default in ParamSignatures:
             if default:
-                if isinstance(default, Depend):
-                    if not inspect.isclass(default.func):
-                        depend_func = default.func
-                    elif hasattr(default.func, "__call__"):
-                        depend_func = default.func.__call__
-                    else:
-                        raise TypeError("must be callable.")
-
-                    if depend_func in lru_cache_sets and default.cache:
-                        depend_func = lru_cache_sets[depend_func]
-                    else:
-                        if default.cache:
-                            original = depend_func
-                            if inspect.iscoroutinefunction(depend_func):
-                                depend_func = alru_cache(depend_func)
-                            else:
-                                depend_func = lru_cache(depend_func)
-                            lru_cache_sets[original] = depend_func
-
-                    CallParams[name] = await self.executor_with_middlewares(
-                        depend_func, default.middlewares, event_context, lru_cache_sets
-                    )
-                    continue
-                else:
-                    raise RuntimeError("checked a unexpected default value.")
-            else:
                 if annotation in PlaceAnnotation:
                     CallParams[name] = PlaceAnnotation[annotation](event_context)
                     continue
                 else:
                     if name not in extra_parameter:
                         raise RuntimeError(f"checked a unexpected annotation: {annotation}")
+                continue
+            if isinstance(default, Depend):
+                if not inspect.isclass(default.func):
+                    depend_func = default.func
+                elif hasattr(default.func, "__call__"):
+                    depend_func = default.func.__call__
+                else:
+                    raise TypeError("must be callable.")
+
+                if depend_func in lru_cache_sets and default.cache:
+                    depend_func = lru_cache_sets[depend_func]
+                else:
+                    if default.cache:
+                        original = depend_func
+                        if inspect.iscoroutinefunction(depend_func):
+                            depend_func = alru_cache(depend_func)
+                        else:
+                            depend_func = alru_cache(depend_func)
+                        lru_cache_sets[original] = depend_func
+
+                CallParams[name] = await self.executor_with_middlewares(
+                    depend_func, default.middlewares, event_context, lru_cache_sets
+                )
+                continue
+            else:
+                raise RuntimeError("checked a unexpected default value.")
 
         async with AsyncExitStack() as stack:
             sorted_middlewares = self.sort_middlewares(executor_protocol.middlewares)
