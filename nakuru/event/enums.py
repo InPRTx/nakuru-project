@@ -1,6 +1,7 @@
 from .models import *
 from enum import Enum
 
+
 class ExternalEvents(Enum):
     GroupFileUpload = GroupFileUpload
     GroupAdminChange = GroupAdminChange
@@ -18,6 +19,7 @@ class ExternalEvents(Enum):
 
     FriendRequest = FriendRequest
     GroupRequest = GroupRequest
+
 
 class ExternalEventTypes(Enum):
     GroupFileUpload = "GroupFileUpload"

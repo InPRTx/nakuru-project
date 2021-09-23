@@ -1,14 +1,17 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 
+
 class Bot(BaseModel):
     user_id: int
     nickname: str
+
 
 class QiDianAccount(BaseModel):
     master_id: int
     ext_name: str
     create_time: int
+
 
 class Stranger(BaseModel):
     user_id: int
@@ -16,6 +19,7 @@ class Stranger(BaseModel):
     sex: str
     age: int
     qid: str
+
 
 class AppVersion(BaseModel):
     app_name: str
@@ -33,6 +37,7 @@ class AppVersion(BaseModel):
     version: str
     protocol: int
 
+
 class NetworkStatistics(BaseModel):
     packet_received: int
     packet_sent: int
@@ -41,6 +46,7 @@ class NetworkStatistics(BaseModel):
     message_sent: int
     disconnect_times: int
     lost_times: int
+
 
 class AppStatus(BaseModel):
     app_initialized: bool
@@ -51,14 +57,17 @@ class AppStatus(BaseModel):
     good: bool
     stat: NetworkStatistics
 
+
 class TextDetection(BaseModel):
     text: str
     confidence: int
     coordinates: str
 
+
 class OCR(BaseModel):
     texts: TextDetection
     language: str
+
 
 class InvitedRequest(BaseModel):
     request_id: int
@@ -69,6 +78,7 @@ class InvitedRequest(BaseModel):
     checked: bool
     actor: int
 
+
 class JoinRequest(BaseModel):
     request_id: int
     requester_uin: int
@@ -78,6 +88,7 @@ class JoinRequest(BaseModel):
     group_name: str
     checked: bool
     actor: int
+
 
 class GroupSystemMessage(BaseModel):
     invited_requests: Optional[InvitedRequest]

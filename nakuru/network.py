@@ -6,6 +6,7 @@ from .logger import Network
 
 import aiohttp
 
+
 class fetch:
     @staticmethod
     async def http_post(url, data_map=None):
@@ -20,7 +21,7 @@ class fetch:
             Network.error(f"requested {url} with {data_map}, responsed {data}, decode failed...")
 
     @staticmethod
-    async def http_get(url, params=None): 
+    async def http_get(url, params=None):
         async with aiohttp.ClientSession() as session:
             async with session.get(url, params=params) as response:
                 response.raise_for_status()
